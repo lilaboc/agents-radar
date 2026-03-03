@@ -17,6 +17,10 @@ const REPORT_FILES = [
   "ai-trending-en",
   "ai-hn",
   "ai-hn-en",
+  "ai-weekly",
+  "ai-weekly-en",
+  "ai-monthly",
+  "ai-monthly-en",
 ] as const;
 const MAX_FEED_ITEMS = 30;
 
@@ -31,6 +35,10 @@ const REPORT_LABELS: Record<string, string> = {
   "ai-trending-en": "AI Open Source Trends",
   "ai-hn": "Hacker News AI 社区动态日报",
   "ai-hn-en": "Hacker News AI Community Digest",
+  "ai-weekly": "AI 工具生态周报",
+  "ai-weekly-en": "AI Tools Weekly Digest",
+  "ai-monthly": "AI 工具生态月报",
+  "ai-monthly-en": "AI Tools Monthly Digest",
 };
 
 interface DateEntry {

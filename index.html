@@ -94,6 +94,21 @@
       font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
       color: var(--dim); padding: 4px 16px 10px;
     }
+    .search-wrap { padding: 0 12px 10px; }
+    #searchInput {
+      width: 100%; height: 28px; padding: 0 9px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg); color: var(--text);
+      font-family: inherit; font-size: 11px;
+    }
+    #searchInput:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-bg);
+    }
+    #searchStatus {
+      min-height: 14px; margin-top: 4px;
+      font-size: 9px; letter-spacing: 0.04em; color: var(--dim);
+    }
     .date-hdr {
       display: flex; align-items: center; justify-content: space-between;
       padding: 5px 14px; cursor: pointer;
@@ -102,6 +117,10 @@
     }
     .date-hdr:hover { color: var(--text); }
     .date-hdr.lit { color: var(--accent); }
+    .date-hdr.search-hit {
+      color: var(--accent);
+      background: linear-gradient(90deg, var(--accent-bg), transparent);
+    }
     .arr { font-size: 8px; transition: transform 0.2s; display: inline-block; }
     .date-group.open .arr { transform: rotate(90deg); }
     .rpt-list { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
@@ -231,6 +250,10 @@
         ☰ &nbsp;选择报告
       </div>
       <div class="side-label">REPORTS</div>
+      <div class="search-wrap">
+        <input id="searchInput" type="search" placeholder="搜索全文，如 Claude">
+        <div id="searchStatus"></div>
+      </div>
       <div id="nav"></div>
     </div>
 
@@ -295,6 +318,84 @@ function getHash() {
 
 // ── State ──
 let currentKey = null;
+let searchIndex = null;
+let searchReady = false;
+let searchQuery = '';
+let searchDebounce = null;
+
+const searchInput = document.getElementById('searchInput');
+const searchStatus = document.getElementById('searchStatus');
+
+function setSearchStatus(text) {
+  searchStatus.textContent = text || '';
+}
+
+function applyDateSearch(query) {
+  const needle = query.trim().toLowerCase();
+  let hits = 0;
+
+  document.querySelectorAll('.date-group').forEach((grp) => {
+    const hdr = grp.querySelector('.date-hdr');
+    if (!hdr) return;
+
+    if (!needle || !searchIndex) {
+      hdr.classList.remove('search-hit');
+      return;
+    }
+
+    const text = searchIndex.get(grp.dataset.date) || '';
+    const matched = text.includes(needle);
+    hdr.classList.toggle('search-hit', matched);
+    if (matched) hits += 1;
+  });
+
+  if (!needle) {
+    setSearchStatus('');
+  } else if (!searchReady) {
+    setSearchStatus('正在建立索引…');
+  } else {
+    setSearchStatus(`匹配 ${hits} 天`);
+  }
+}
+
+async function buildSearchIndex(dates) {
+  const index = new Map();
+  await Promise.all(
+    dates.map(async ({ date, reports }) => {
+      const chunks = await Promise.all(
+        reports.map(async (report) => {
+          try {
+            const res = await fetch(`./digests/${date}/${report}.md`);
+            if (!res.ok) return '';
+            return await res.text();
+          } catch {
+            return '';
+          }
+        })
+      );
+      index.set(date, chunks.join('\n').toLowerCase());
+    })
+  );
+  return index;
+}
+
+function initSearch(dates) {
+  searchReady = false;
+  setSearchStatus('索引准备中…');
+
+  buildSearchIndex(dates).then((index) => {
+    searchIndex = index;
+    searchReady = true;
+    applyDateSearch(searchQuery);
+    if (!searchQuery.trim()) setSearchStatus('');
+  });
+}
+
+searchInput.addEventListener('input', () => {
+  searchQuery = searchInput.value;
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => applyDateSearch(searchQuery), 120);
+});
 
 function setContent(html) {
   document.getElementById('content').innerHTML = html;
@@ -422,6 +523,7 @@ window.addEventListener('popstate', () => {
     if (!dates?.length) throw new Error('manifest is empty');
 
     buildNav(dates);
+    initSearch(dates);
 
     const hash = getHash();
     const first = dates[0];
